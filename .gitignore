@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local virtual environment
+env/
+venv/
+ENV/
+
+# Heavy media and model checkpoints (keeps your repo lightweight)
+*.task
+*.pth
+*.mp4
+*.avi
+
+# Operating system files
+.DS_Store
+Thumbs.db
