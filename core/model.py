@@ -9,9 +9,9 @@ class FeatureImageModel(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
             nn.CrossMapLRN2d(size=5, alpha=0.0001, beta=0.75, k=1.0),
-            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2, groups=2),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2, groups=2), #feature processing map
+            nn.ReLU(inplace=True), #activation states
+            nn.MaxPool2d(kernel_size=3, stride=2), #pooling modules
             nn.CrossMapLRN2d(size=5, alpha=0.0001, beta=0.75, k=1.0),
             nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True),

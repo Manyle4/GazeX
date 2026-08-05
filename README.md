@@ -28,7 +28,7 @@ Eyetheia-Gaze-Tracking-System/
 ```
 
 ## AI models  
-[Download the models from the google drive folder:](https://drive.google.com/drive/folders/1HctHugiloZXlQdLVYwzirQUiun6tvBSk?usp=drive_link)
+Download the models from the google drive folder [this link](https://drive.google.com/drive/folders/1HctHugiloZXlQdLVYwzirQUiun6tvBSk?usp=drive_link)
 
 ## Installation
 1. Clone the repository
