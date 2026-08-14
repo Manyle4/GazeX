@@ -35,7 +35,7 @@ VLC_PATHS        = [
     r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
 ]
 PANEL_WIDTH      = 160    # px — right panel width
-PANEL_GAZE_ZONE  = 220    # px from right edge — gaze here activates panel controller
+PANEL_GAZE_ZONE  = 600    # px from right edge — gaze here activates panel controller
 PANEL_HIDE_AFTER = 4.0    # seconds without gaze before panel fades (Milestone 3)
 
 
@@ -63,7 +63,7 @@ class VLCMediaDashboard:
         self.dashboard = dashboard
 
         self.win = tk.Toplevel(self.root)
-        self.win.title("EyeTheia Media Control")
+        self.win.title("GazeX Media Control")
 
         try:
             self.win.state("zoomed")
@@ -75,6 +75,8 @@ class VLCMediaDashboard:
 
         pyautogui.PAUSE    = 0
         pyautogui.FAILSAFE = False
+
+        self.vlc_process = None
 
         # Right panel state
         self._panel_win     = None
@@ -102,10 +104,8 @@ class VLCMediaDashboard:
 
     def _make_dwell_controller(self) -> DwellController:
         return DwellController(
-            entry_radius     = int(min(self.scr_w, self.scr_h) * 0.28),
-            hold_radius      = int(min(self.scr_w, self.scr_h) * 0.38),
             dwell_seconds    = 1.5,
-            grace_seconds    = 0.8,
+            switch_margin    = 40.0,
             min_hold_seconds = 0.3,
             cooldown_seconds = 0.8,
         )
@@ -122,7 +122,7 @@ class VLCMediaDashboard:
 
         self._canvas.create_text(
             self.scr_w // 2, 80,
-            text="EyeTheia Media Control",
+            text="GazeX Media Control",
             font=("Arial", 22, "bold"),
             fill="#f8fafc",
         )
@@ -141,12 +141,12 @@ class VLCMediaDashboard:
             anchor=tk.CENTER,
         )
 
-        self._launch_btn = ttk.Button(
-            btn_frame, text="LAUNCH VLC",
-            command=self._launch_vlc,
-            style="BigDashboard.TButton",
-        )
-        self._launch_btn.pack(pady=20, ipadx=20)
+        # self._launch_btn = ttk.Button(
+        #     btn_frame, text="LAUNCH VLC",
+        #     command=self._launch_vlc,
+        #     style="BigDashboard.TButton",
+        # )
+        # self._launch_btn.pack(pady=20, ipadx=20)
 
         self._load_btn = ttk.Button(
             btn_frame, text="LOAD MOVIE",
@@ -154,6 +154,13 @@ class VLCMediaDashboard:
             style="BigDashboard.TButton",
         )
         self._load_btn.pack(pady=20, ipadx=20)
+        
+        self._close_btn = ttk.Button(
+            btn_frame, text="CLOSE",
+            command=self._on_close,
+            style="BigDashboard.TButton",
+        )
+        self._close_btn.pack(pady=20, ipadx=20)
 
         self._status_lbl = ttk.Label(
             self.win,
@@ -179,91 +186,190 @@ class VLCMediaDashboard:
 
     def _register_main_buttons(self):
         self.win.update_idletasks()
-        self._main_dwell.set_buttons([self._launch_btn, self._load_btn])
+        self._main_dwell.set_buttons([self._load_btn, self._close_btn])
 
     # ── Movie list view ───────────────────────────────────────────────────
+    
+    # def _show_movie_list(self):
+    #     movies = _scan_movies()
+    #     self._clear_canvas()
+    #     self._view = "movie_list"
+    #     self._movie_buttons = []
+    #     self._main_dwell = self._make_dwell_controller()
 
-    def _show_movie_list(self):
+    #     self._canvas = tk.Canvas(self.win, bg="#1e293b", highlightthickness=0)
+    #     self._canvas.pack(fill=tk.BOTH, expand=True)
+
+    #     self._canvas.create_text(
+    #         (self.scr_w - PANEL_WIDTH) // 2, 60,
+    #         text="Select a Movie",
+    #         font=("Arial", 20, "bold"),
+    #         fill="#f8fafc",
+    #     )
+    #     self._canvas.create_text(
+    #         (self.scr_w - PANEL_WIDTH) // 2, 95,
+    #         text=f"Folder: {MOVIE_FOLDER}",
+    #         font=("Arial", 10),
+    #         fill="#64748b",
+    #     )
+
+    #     list_frame = tk.Frame(self.win, bg="#1e293b")
+    #     list_frame.place(
+    #         x=(self.scr_w - PANEL_WIDTH) // 2,
+    #         rely=0.55,
+    #         anchor=tk.CENTER,
+    #         width=min(700, self.scr_w - PANEL_WIDTH - 40),
+    #     )
+
+    #     if not movies:
+    #         self._canvas.create_text(
+    #             (self.scr_w - PANEL_WIDTH) // 2, self.scr_h // 2,
+    #             text=f"No video files found in:\n{MOVIE_FOLDER}",
+    #             font=("Arial", 13),
+    #             fill="#94a3b8",
+    #             justify=tk.CENTER,
+    #         )
+    #     else:
+    #         for filepath in movies[:6]:
+    #             name = os.path.splitext(os.path.basename(filepath))[0]
+    #             if len(name) > 45:
+    #                 name = name[:42] + "..."
+    #             btn = ttk.Button(
+    #                 list_frame,
+    #                 text=name,
+    #                 command=lambda fp=filepath: self._play_movie(fp),
+    #                 style="BigDashboard.TButton",
+    #             )
+    #             btn.pack(fill=tk.X, pady=6, padx=20)
+    #             self._movie_buttons.append(btn)
+
+    #     back_btn = ttk.Button(
+    #         self.win, text="BACK",
+    #         command=self._build_main_view,
+    #         style="BigDashboard.TButton",
+    #     )
+    #     back_btn.place(relx=0.45, rely=0.92, anchor=tk.CENTER)
+    #     self._movie_buttons.append(back_btn)
+
+    #     self._status_lbl = ttk.Label(
+    #         self.win,
+    #         text="Look at a movie — blink to play",
+    #         font=("Arial", 11),
+    #         background="#1e293b",
+    #         foreground="#94a3b8",
+    #     )
+    #     self._status_lbl.place(relx=0.45, rely=0.85, anchor=tk.CENTER)
+
+    #     self._progress_var = tk.DoubleVar(value=0.0)
+    #     self._progress_bar = ttk.Progressbar(
+    #         self.win,
+    #         variable=self._progress_var,
+    #         maximum=100,
+    #         length=320,
+    #         mode="determinate",
+    #     )
+    #     self._progress_bar.place(relx=0.45, rely=0.89, anchor=tk.CENTER)
+
+    #     self.win.after(300, lambda: self._main_dwell.set_buttons(self._movie_buttons))
+
+    def _show_movie_list(self, page: int = 0):
+        MOVIES_PER_PAGE = 3
+        
         movies = _scan_movies()
         self._clear_canvas()
         self._view = "movie_list"
         self._movie_buttons = []
         self._main_dwell = self._make_dwell_controller()
+        self._movie_page = page
 
         self._canvas = tk.Canvas(self.win, bg="#1e293b", highlightthickness=0)
         self._canvas.pack(fill=tk.BOTH, expand=True)
 
+        total_pages = max(1, (len(movies) + MOVIES_PER_PAGE - 1) // MOVIES_PER_PAGE)
         self._canvas.create_text(
             (self.scr_w - PANEL_WIDTH) // 2, 60,
-            text="Select a Movie",
+            text=f"Select a Movie   (page {page + 1} of {total_pages})",
             font=("Arial", 20, "bold"),
             fill="#f8fafc",
-        )
-        self._canvas.create_text(
-            (self.scr_w - PANEL_WIDTH) // 2, 95,
-            text=f"Folder: {MOVIE_FOLDER}",
-            font=("Arial", 10),
-            fill="#64748b",
         )
 
         list_frame = tk.Frame(self.win, bg="#1e293b")
         list_frame.place(
             x=(self.scr_w - PANEL_WIDTH) // 2,
-            rely=0.55,
+            rely=0.5,
             anchor=tk.CENTER,
             width=min(700, self.scr_w - PANEL_WIDTH - 40),
         )
+
+        start = page * MOVIES_PER_PAGE
+        page_movies = movies[start:start + MOVIES_PER_PAGE]
 
         if not movies:
             self._canvas.create_text(
                 (self.scr_w - PANEL_WIDTH) // 2, self.scr_h // 2,
                 text=f"No video files found in:\n{MOVIE_FOLDER}",
-                font=("Arial", 13),
-                fill="#94a3b8",
-                justify=tk.CENTER,
+                font=("Arial", 13), fill="#94a3b8", justify=tk.CENTER,
             )
         else:
-            for filepath in movies[:6]:
+            for filepath in page_movies:
                 name = os.path.splitext(os.path.basename(filepath))[0]
                 if len(name) > 45:
                     name = name[:42] + "..."
                 btn = ttk.Button(
-                    list_frame,
-                    text=name,
+                    list_frame, text=name,
                     command=lambda fp=filepath: self._play_movie(fp),
                     style="BigDashboard.TButton",
                 )
-                btn.pack(fill=tk.X, pady=6, padx=20)
+                # generous vertical spacing — this is the whole point of pagination
+                btn.pack(fill=tk.X, pady=16, padx=20, ipady=10)
                 self._movie_buttons.append(btn)
 
-        back_btn = ttk.Button(
-            self.win, text="BACK",
-            command=self._build_main_view,
+        # ── Nav row: CLOSE / PREV / NEXT — always exactly these, never more ──
+        nav_frame = tk.Frame(self.win, bg="#1e293b")
+        nav_frame.place(relx=0.45, rely=0.85, anchor=tk.CENTER)
+
+        close_btn = ttk.Button(
+            nav_frame, text="CLOSE",
+            command=self._build_main_view,   # "close this page" = back to main
             style="BigDashboard.TButton",
         )
-        back_btn.place(relx=0.45, rely=0.92, anchor=tk.CENTER)
-        self._movie_buttons.append(back_btn)
+        close_btn.pack(side=tk.LEFT, padx=20)
+        self._movie_buttons.append(close_btn)
+
+        if page > 0:
+            prev_btn = ttk.Button(
+                nav_frame, text="PREV",
+                command=lambda: self._show_movie_list(page - 1),
+                style="BigDashboard.TButton",
+            )
+            prev_btn.pack(side=tk.LEFT, padx=20)
+            self._movie_buttons.append(prev_btn)
+
+        if start + MOVIES_PER_PAGE < len(movies):
+            next_btn = ttk.Button(
+                nav_frame, text="NEXT",
+                command=lambda: self._show_movie_list(page + 1),
+                style="BigDashboard.TButton",
+            )
+            next_btn.pack(side=tk.LEFT, padx=20)
+            self._movie_buttons.append(next_btn)
 
         self._status_lbl = ttk.Label(
-            self.win,
-            text="Look at a movie — blink to play",
-            font=("Arial", 11),
-            background="#1e293b",
-            foreground="#94a3b8",
+            self.win, text="Look at a movie — blink to play",
+            font=("Arial", 11), background="#1e293b", foreground="#94a3b8",
         )
-        self._status_lbl.place(relx=0.45, rely=0.85, anchor=tk.CENTER)
+        self._status_lbl.place(relx=0.45, rely=0.92, anchor=tk.CENTER)
 
         self._progress_var = tk.DoubleVar(value=0.0)
         self._progress_bar = ttk.Progressbar(
-            self.win,
-            variable=self._progress_var,
-            maximum=100,
-            length=320,
-            mode="determinate",
+            self.win, variable=self._progress_var, maximum=100,
+            length=320, mode="determinate",
         )
-        self._progress_bar.place(relx=0.45, rely=0.89, anchor=tk.CENTER)
+        self._progress_bar.place(relx=0.45, rely=0.96, anchor=tk.CENTER)
 
         self.win.after(300, lambda: self._main_dwell.set_buttons(self._movie_buttons))
+    
+    # ──End Movie list view End───────────────────────────────────────────────────
 
     # ── Movie playback ────────────────────────────────────────────────────
 
@@ -273,8 +379,20 @@ class VLCMediaDashboard:
             print("[VLC] vlc.exe not found.")
             return
         print(f"[VLC] Playing: {os.path.basename(filepath)}")
-        subprocess.Popen([vlc, filepath])
-        self.win.after(500, self._build_main_view)
+        if self.vlc_process is not None:
+            pass
+        else:
+            self.vlc_process = subprocess.Popen([vlc, filepath])
+
+        # Reset dwell so stale button references are cleared immediately
+        self._main_dwell.reset()
+
+        # Move cursor to screen centre so it is not stuck on the dead movie button.
+        # The panel will appear on the right edge — moving to centre gives the user
+        # a neutral starting position from which gaze can reach the panel.
+        pyautogui.moveTo(self.scr_w // 2, self.scr_h // 2)
+
+        self.win.after(800, self._build_main_view)
 
     # ── Canvas management ─────────────────────────────────────────────────
 
@@ -287,86 +405,56 @@ class VLCMediaDashboard:
     # ── Right panel ───────────────────────────────────────────────────────
 
     def _spawn_panel(self):
-        """
-        Create the right-side control panel.
-
-        Positioned at the RIGHT edge of the screen, full height, PANEL_WIDTH wide.
-        Buttons stacked vertically in the centre of the panel.
-        This keeps controls in the reliable gaze zone (not bottom edge).
-        """
         print("[VLC] Spawning right panel.")
-
+        
         self._panel_win = tk.Toplevel(self.win)
-        self._panel_win.title("EyeTheia Controls")
+        self._panel_win.title("GazeX Controls")
         self._panel_win.overrideredirect(True)
         self._panel_win.attributes("-topmost", True)
-
-        # Position: right edge, full height
         self._panel_win.geometry(
             f"{PANEL_WIDTH}x{self.scr_h}+{self.scr_w - PANEL_WIDTH}+0"
         )
-
-        # Dark background
+        self._panel_win.update_idletasks()
+        
         panel_canvas = tk.Canvas(
             self._panel_win, bg="#0f172a", highlightthickness=0
         )
         panel_canvas.pack(fill=tk.BOTH, expand=True)
-
-        # Label at top of panel
-        panel_canvas.create_text(
-            PANEL_WIDTH // 2, 30,
-            text="CONTROLS",
-            font=("Arial", 9, "bold"),
-            fill="#475569",
-        )
-
-        # Thin accent line under label
-        panel_canvas.create_line(
-            10, 50, PANEL_WIDTH - 10, 50,
-            fill="#1e3a5f", width=1,
-        )
-
-        # Button frame — centred vertically
+        
         frame = tk.Frame(self._panel_win, bg="#0f172a")
         frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-        # Buttons stacked vertically with generous spacing
-        # Vertical stacking keeps each button clearly separated
-        # so gaze jitter cannot accidentally land on the adjacent one
-        s_play = ttk.Button(
-            frame, text="PLAY\nPAUSE",
-            command=self._vlc_play_pause,
-            style="BigDashboard.TButton",
-        )
-        s_up = ttk.Button(
-            frame, text="VOL\nUP",
-            command=lambda: pyautogui.press("volumeup"),
-            style="BigDashboard.TButton",
-        )
-        s_down = ttk.Button(
-            frame, text="VOL\nDOWN",
-            command=lambda: pyautogui.press("volumedown"),
-            style="BigDashboard.TButton",
-        )
-        s_movie = ttk.Button(
-            frame, text="LOAD\nMOVIE",
-            command=self._show_movie_list,
-            style="BigDashboard.TButton",
-        )
-
-        # Pack vertically with large spacing — prevents adjacent-button confusion
-        for btn in [s_play, s_up, s_down, s_movie]:
+        # s_play = ttk.Button(frame, text="PLAY\nPAUSE",  command=self._vlc_play_pause,                  style="Panel.TButton")
+        s_play = ttk.Button(frame, text="PLAY\nPAUSE",  command=self._close_panel,                  style="Panel.TButton")
+        s_up   = ttk.Button(frame, text="VOL\nUP",      command=lambda: pyautogui.press("volumeup"),   style="Panel.TButton")
+        s_down = ttk.Button(frame, text="VOL\nDOWN",    command=lambda: pyautogui.press("volumedown"), style="Panel.TButton")
+        s_close = ttk.Button(frame, text="CLOSE",       command=self._close_panel,                 style="Panel.TButton")
+        
+        for btn in [s_play, s_up, s_down, s_close]:
             btn.pack(pady=18, padx=8, fill=tk.X)
 
-        self._panel_buttons = [s_play, s_up, s_down, s_movie]
+        self._panel_buttons = [s_play, s_up, s_down, s_close]
         self._panel_dwell   = self._make_dwell_controller()
         self._panel_last_gaze_time = time.monotonic()
         self._panel_visible = True
 
-        self._panel_win.after(
-            300,
-            lambda: self._panel_dwell.set_buttons(self._panel_buttons),
-        )
+        # Re-assert topmost after 700ms — VLC steals window focus when it opens
+        # and knocks our panel behind it. Lifting again puts it back on top.
+        def _reassert_top():
+            if self._panel_win and self._panel_win.winfo_exists():
+                self._panel_win.lift()
+                self._panel_win.attributes("-topmost", True)
+                self._panel_dwell.set_buttons(self._panel_buttons)
+                # Print actual button positions so you can verify gaze reaches them
+                self._panel_win.update_idletasks()
+                for btn in self._panel_buttons:
+                    cx = btn.winfo_rootx() + btn.winfo_width()  / 2
+                    cy = btn.winfo_rooty() + btn.winfo_height() / 2
+                    print(f"[Panel] '{btn.cget('text').replace(chr(10),' ')}' center=({cx:.0f},{cy:.0f})")
+                print(f"[Panel] Gaze zone: gx >= {self.scr_w - PANEL_GAZE_ZONE}  (panel right edge: {self.scr_w})")
+
+        self._panel_win.after(700, _reassert_top)
+
 
     def _destroy_panel(self):
         if self._panel_win and self._panel_win.winfo_exists():
@@ -405,6 +493,10 @@ class VLCMediaDashboard:
             and self._panel_win.winfo_exists()
             and self._panel_dwell is not None
         )
+        
+        # Temporary debug — remove after confirming panel works
+        if panel_active:
+            print(f"[Tick] gx={int(gx)} screen width={self.scr_w} panel_threshold={self.scr_w - PANEL_GAZE_ZONE}  on_panel={self._gaze_on_panel(gx)}")
 
         if panel_active and self._gaze_on_panel(gx):
             # Gaze is in panel zone
@@ -465,8 +557,10 @@ class VLCMediaDashboard:
 
         if btn is not None:
             print(f"[VLC] Blink activating: {btn.cget('text')}")
-            # cursor is already pinned to btn center by _render
-            # pyautogui.click() in app.py fires at that position
+            try:
+                btn.invoke()
+            except tk.TclError as e:
+                print(f"[VLC] invoke() failed: {e}")
         else:
             print("[VLC] Blink — no button ready.")
 
@@ -507,7 +601,7 @@ class VLCMediaDashboard:
 
         all_btns = (
             self._movie_buttons if self._view == "movie_list"
-            else [self._launch_btn, self._load_btn]
+            else [self._load_btn, self._close_btn]
         )
         for btn in all_btns:
             try:
@@ -572,7 +666,10 @@ class VLCMediaDashboard:
     def _launch_vlc(self):
         vlc = _find_vlc()
         if vlc:
-            subprocess.Popen([vlc])
+            if self.vlc_process is not None:
+                pass
+            else:
+                self.vlc_process = subprocess.Popen([vlc])
         else:
             print("[VLC] vlc.exe not found.")
 
@@ -602,3 +699,14 @@ class VLCMediaDashboard:
             self._panel_dwell.reset()
         self._destroy_panel()
         self.win.destroy()
+        
+    def _close_panel(self):
+        print(f"[Panel] 'Close' clicked on the panel. Closing VLC also.")
+        if self.vlc_process is not None and self.vlc_process.poll() is None:
+            # poll() is None means the process is still running
+            self.vlc_process.terminate()  # Graceful close
+            # self.vlc_process.kill()     # Force close if terminate doesn't work
+            self.vlc_process = None
+            print("[VLC] Closed VLC process successfully.")
+        
+        self._destroy_panel()

@@ -58,7 +58,7 @@ class SplashScreen:
         # App name
         canvas.create_text(
             w // 2, 90,
-            text="EyeTheia",
+            text="GazeX",
             font=("Arial", 36, "bold"),
             fill=self.TEXT_LIGHT,
         )
@@ -66,7 +66,7 @@ class SplashScreen:
         # Tagline
         canvas.create_text(
             w // 2, 135,
-            text="Gaze-controlled accessibility suite",
+            text="Gaze-controlled Media Control",
             font=("Arial", 13),
             fill=self.ACCENT,
         )

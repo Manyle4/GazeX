@@ -11,19 +11,19 @@ from ui.styles import configure_application_themes
 from ui.calibration_page import CalibrationWindow
 from ui.test import TestGazeWindow
 from ui.vlc import VLCMediaDashboard
-from ui.draw import DrawWindow
+# from ui.draw import DrawWindow
 
 import pyautogui
 pyautogui.FAILSAFE = False   # ← add this line
 # pyautogui.PAUSE = 0
 
 
-class EyeTheiaDesktopUI:
+class GazeXDesktopUI:
     def __init__(self, window_root, tracking_engine, vision_pipeline_loop):
         self.root = window_root
         self.engine = tracking_engine
 
-        self.root.title("EyeTheia")
+        self.root.title("GazeX")
         try:
             self.root.state("zoomed")
         except tk.TclError:
@@ -44,17 +44,19 @@ class EyeTheiaDesktopUI:
         self.smooth_y = self.scr_h // 2
         self.blink_triggered = False
 
+        # Windows of the application
         self.active_calib_view = None
         self.active_test_view  = None
         self.active_vlc        = None
-        self.active_draw        = None
+        # self.active_draw        = None
 
+        # Extracted features passed from the worker thread
         self.latest_features = None
 
         # ── UI ────────────────────────────────────────────────────────────────
         self.title_label = ttk.Label(
             self.root,
-            text="EyeTheia Gaze Control",
+            text="GazeX",
             font=("Arial", 18, "bold"),
         )
         self.title_label.pack(pady=30)
@@ -90,21 +92,21 @@ class EyeTheiaDesktopUI:
         )
         self.vlc_btn.pack(pady=15)
         
-        self.draw_btn = ttk.Button(
-            self.root,
-            text="Draw",
-            command=self.open_draw_page,
-            style="BigDashboard.TButton",
-        )
-        self.draw_btn.pack(pady=15)
+        # self.draw_btn = ttk.Button(
+        #     self.root,
+        #     text="Draw",
+        #     command=self.open_draw_page,
+        #     style="BigDashboard.TButton",
+        # )
+        # self.draw_btn.pack(pady=15)
         
-        self.offset_btn = ttk.Button(
-        self.root,
-        text="Measure Gaze Offset",
-        command=self.open_offset_calibration,
-        style="BigDashboard.TButton",
-        )
-        self.offset_btn.pack(pady=15)
+        # self.offset_btn = ttk.Button(
+        # self.root,
+        # text="Measure Gaze Offset",
+        # command=self.open_offset_calibration,
+        # style="BigDashboard.TButton",
+        # )
+        # self.offset_btn.pack(pady=15)
 
         # ── Background pipeline ───────────────────────────────────────────────
         self.pipeline_thread = threading.Thread(
@@ -149,11 +151,8 @@ class EyeTheiaDesktopUI:
                         self.active_calib_view.latest_features = self.latest_features
                         self.active_calib_view.on_new_gaze(self.smooth_x, self.smooth_y)
                         
-                    if self.active_test_view and self.active_test_view.win.winfo_exists():
-                        pyautogui.moveTo(self.smooth_x, self.smooth_y)
-                        
-                    if self.active_draw and self.active_draw.win.winfo_exists():
-                        self.active_draw.move_mouse(self.smooth_x, self.smooth_y)
+                    # if self.active_draw and self.active_draw.win.winfo_exists():
+                    #     self.active_draw.move_mouse(self.smooth_x, self.smooth_y)
 
             except queue.Empty:
                 pass
@@ -191,104 +190,100 @@ class EyeTheiaDesktopUI:
             return
         self.active_vlc = VLCMediaDashboard(self.root, self)
         
-    def open_draw_page(self):
-        if self.active_draw and self.active_draw.win.winfo_exists():
-            return
-        self.active_draw = DrawWindow(self.root)
+    # def open_draw_page(self):
+    #     if self.active_draw and self.active_draw.win.winfo_exists():
+    #         return
+    #     self.active_draw = DrawWindow(self.root)
 
     def finish_calibration_workflow(self):
         if self.active_calib_view and self.active_calib_view.win.winfo_exists():
-            messagebox.showinfo(
-                "EyeTheia",
-                "Calibration complete.\nGaze tracking is now personalised to you.",
-            )
             self.active_calib_view.win.destroy()
             self.active_calib_view = None
         
-    def open_offset_calibration(self):
-        """
-        Simple offset measurement tool.
-        Shows a dot in the centre of the screen.
-        User looks at it for 3 seconds.
-        Average gaze position is compared to dot position.
-        Difference becomes the offset correction.
-        """
-        import time
+    # def open_offset_calibration(self):
+    #     """
+    #     Simple offset measurement tool.
+    #     Shows a dot in the centre of the screen.
+    #     User looks at it for 3 seconds.
+    #     Average gaze position is compared to dot position.
+    #     Difference becomes the offset correction.
+    #     """
+    #     import time
 
-        win = tk.Toplevel(self.root)
-        win.attributes("-fullscreen", True)
-        win.configure(bg="white")
+    #     win = tk.Toplevel(self.root)
+    #     win.attributes("-fullscreen", True)
+    #     win.configure(bg="white")
 
-        scr_w = win.winfo_screenwidth()
-        scr_h = win.winfo_screenheight()
+    #     scr_w = win.winfo_screenwidth()
+    #     scr_h = win.winfo_screenheight()
 
-        # Target dot in the exact centre
-        target_x = scr_w // 2
-        target_y = scr_h // 2
+    #     # Target dot in the exact centre
+    #     target_x = scr_w // 2
+    #     target_y = scr_h // 2
 
-        canvas = tk.Canvas(win, bg="white", highlightthickness=0)
-        canvas.pack(fill=tk.BOTH, expand=True)
+    #     canvas = tk.Canvas(win, bg="white", highlightthickness=0)
+    #     canvas.pack(fill=tk.BOTH, expand=True)
 
-        canvas.create_text(
-            target_x, target_y - 80,
-            text="Look at the dot and hold still for 3 seconds",
-            font=("Arial", 18),
-            fill="#333333",
-        )
+    #     canvas.create_text(
+    #         target_x, target_y - 80,
+    #         text="Look at the dot and hold still for 3 seconds",
+    #         font=("Arial", 18),
+    #         fill="#333333",
+    #     )
 
-        # Draw target dot
-        canvas.create_oval(
-            target_x - 15, target_y - 15,
-            target_x + 15, target_y + 15,
-            fill="#0f172a", outline="",
-        )
+    #     # Draw target dot
+    #     canvas.create_oval(
+    #         target_x - 15, target_y - 15,
+    #         target_x + 15, target_y + 15,
+    #         fill="#0f172a", outline="",
+    #     )
 
-        status_lbl = tk.Label(
-            win, text="Collecting...",
-            font=("Arial", 14), bg="white", fg="#666666",
-        )
-        status_lbl.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
+    #     status_lbl = tk.Label(
+    #         win, text="Collecting...",
+    #         font=("Arial", 14), bg="white", fg="#666666",
+    #     )
+    #     status_lbl.place(relx=0.5, rely=0.7, anchor=tk.CENTER)
 
-        gaze_samples = []
-        start_time   = time.monotonic()
-        collect_secs = 3.0
+    #     gaze_samples = []
+    #     start_time   = time.monotonic()
+    #     collect_secs = 3.0
 
-        def collect():
-            elapsed = time.monotonic() - start_time
-            remaining = max(0, collect_secs - elapsed)
+    #     def collect():
+    #         elapsed = time.monotonic() - start_time
+    #         remaining = max(0, collect_secs - elapsed)
 
-            if elapsed < collect_secs:
-                gaze_samples.append((self.smooth_x, self.smooth_y))
-                status_lbl.config(
-                    text=f"Hold still... {remaining:.1f}s  ({len(gaze_samples)} samples)"
-                )
-                win.after(30, collect)
-            else:
-                # Compute average gaze position
-                avg_x = int(sum(s[0] for s in gaze_samples) / len(gaze_samples))
-                avg_y = int(sum(s[1] for s in gaze_samples) / len(gaze_samples))
+    #         if elapsed < collect_secs:
+    #             gaze_samples.append((self.smooth_x, self.smooth_y))
+    #             status_lbl.config(
+    #                 text=f"Hold still... {remaining:.1f}s  ({len(gaze_samples)} samples)"
+    #             )
+    #             win.after(30, collect)
+    #         else:
+    #             # Compute average gaze position
+    #             avg_x = int(sum(s[0] for s in gaze_samples) / len(gaze_samples))
+    #             avg_y = int(sum(s[1] for s in gaze_samples) / len(gaze_samples))
 
-                # Offset = where button IS minus where gaze LANDED
-                dx = target_x - avg_x
-                dy = target_y - avg_y
+    #             # Offset = where button IS minus where gaze LANDED
+    #             dx = target_x - avg_x
+    #             dy = target_y - avg_y
 
-                self.engine.set_gaze_offset(dx, dy)
+    #             self.engine.set_gaze_offset(dx, dy)
 
-                status_lbl.config(
-                    text=f"Offset set: dx={dx}  dy={dy}  (gaze was at {avg_x},{avg_y}  target was {target_x},{target_y})"
-                )
-                canvas.create_oval(
-                    avg_x - 8, avg_y - 8,
-                    avg_x + 8, avg_y + 8,
-                    fill="#ef4444", outline="",
-                )
-                canvas.create_text(
-                    avg_x, avg_y + 25,
-                    text=f"Your gaze: ({avg_x},{avg_y})",
-                    font=("Arial", 11),
-                    fill="#ef4444",
-                )
+    #             status_lbl.config(
+    #                 text=f"Offset set: dx={dx}  dy={dy}  (gaze was at {avg_x},{avg_y}  target was {target_x},{target_y})"
+    #             )
+    #             canvas.create_oval(
+    #                 avg_x - 8, avg_y - 8,
+    #                 avg_x + 8, avg_y + 8,
+    #                 fill="#ef4444", outline="",
+    #             )
+    #             canvas.create_text(
+    #                 avg_x, avg_y + 25,
+    #                 text=f"Your gaze: ({avg_x},{avg_y})",
+    #                 font=("Arial", 11),
+    #                 fill="#ef4444",
+    #             )
 
-                win.after(2000, win.destroy)
+    #             win.after(2000, win.destroy)
 
-        win.after(500, collect)
+    #     win.after(500, collect)

@@ -31,12 +31,25 @@ def configure_application_themes():
     )
     
     style.configure(
+        "Panel.TButton",
+        font=("Arial", 20, "bold"),
+        foreground=TEXT_LIGHT,
+        background="#ff4800",      # Core body color
+        borderwidth=3,                # Thick border layout array
+        bordercolor="#00ff88",      # ◄── YOUR CUSTOM OUTLINE COLOR HERE!
+        lightcolor="#00ff88",       # Secondary bevel highlights matching theme
+        darkcolor="#00ff88",
+        padding=(40, 10)              # ◄── MAKES BUTTONS BIGGER (Horizontal, Vertical padding)
+    )
+    
+    style.configure(
         "Snapped.TButton",
         font=("Arial", 13, "bold"),
         foreground="#f8fafc",     # Off-white crisp text
         background="#06b6d4",     # High-visibility Cyan accent focus fill!
         borderwidth=3,
-        bordercolor="#22d3ee"
+        bordercolor="#22d3ee",
+        padding=(40, 20) 
     )
     
     # Interactive hovering state feedback animation configurations

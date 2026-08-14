@@ -5,7 +5,7 @@ ui/calibration_page.py
 Automatic 9-point dwell calibration followed by automatic offset measurement.
 
 Flow:
-  Phase 1 — Calibration: 9 dots, timed countdown, auto-capture
+  Phase 1 — Calibration: 13 dots, timed countdown, auto-capture
   Phase 2 — Fine-tuning: model adapts to user in background
   Phase 3 — Offset: single centre dot, user looks at it, offset computed
   Phase 4 — Done: signals dashboard to show completion dialog
@@ -38,11 +38,38 @@ OFFSET_COLLECT_SECONDS = 2.0   # how long to collect gaze for offset
 
 
 def _make_grid(screen_w: int, screen_h: int) -> list[tuple[int, int]]:
+    """
+    13-point calibration grid matching the original GazeX layout.
+
+    Consists of a 3×3 outer grid (9 points) plus 4 inner midpoints
+    placed halfway between the screen centre and each corner.
+    These inner points improve model adaptation in the regions where
+    users most commonly look during normal screen interaction.
+
+    Total session time at 2s per point: approximately 26 seconds.
+    """
     mx = int(screen_w * MARGIN_X_FRAC)
     my = int(screen_h * MARGIN_Y_FRAC)
-    xs = [mx, screen_w // 2, screen_w - mx]
-    ys = [my, screen_h // 2, screen_h - my]
-    return [(x, y) for y in ys for x in xs]
+
+    cx = screen_w // 2
+    cy = screen_h // 2
+
+    xs_outer = [mx, cx, screen_w - mx]
+    ys_outer = [my, cy, screen_h - my]
+
+    # Outer 3×3 grid — Z-order row by row
+    outer = [(x, y) for y in ys_outer for x in xs_outer]
+
+    # 4 inner midpoints — midway between centre and each corner
+    # These cover the quadrant centres that the 3×3 grid misses
+    inner = [
+        ((mx + cx) // 2,              (my + cy) // 2),               # top-left quadrant
+        ((cx + screen_w - mx) // 2,   (my + cy) // 2),               # top-right quadrant
+        ((mx + cx) // 2,              (cy + screen_h - my) // 2),    # bottom-left quadrant
+        ((cx + screen_w - mx) // 2,   (cy + screen_h - my) // 2),   # bottom-right quadrant
+    ]
+
+    return outer + inner
 
 
 class CalibrationWindow:
@@ -59,7 +86,7 @@ class CalibrationWindow:
         self.tuning_progress_queue = tuning_progress_queue
 
         self.win = tk.Toplevel(self.root)
-        self.win.title("EyeTheia — Calibration")
+        self.win.title("GazeX — Calibration")
         try:
             self.win.state("zoomed")
         except tk.TclError:

@@ -35,10 +35,8 @@ class TestGazeWindow:
 
         # DwellController owns all timing logic
         self._dwell = DwellController(
-            entry_radius     = int(min(scr_w, scr_h) * 0.30),
-            hold_radius      = int(min(scr_w, scr_h) * 0.42),
             dwell_seconds    = 1.5,
-            grace_seconds    = 0.8,
+            switch_margin    = 40.0,
             min_hold_seconds = 0.3,
             cooldown_seconds = 0.8,
         )
@@ -49,7 +47,7 @@ class TestGazeWindow:
         self._build_ui()
 
         # Register buttons after UI is built
-        self._dwell.set_buttons([self.click_btn, self.reset_btn])
+        self._dwell.set_buttons([self.click_btn, self.reset_btn, self.close_btn])
 
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
         self.win.after(500, self._verify_layout)
@@ -98,6 +96,14 @@ class TestGazeWindow:
             style="BigDashboard.TButton",
         )
         self.click_btn.pack(pady=30)
+        
+        self.close_btn = ttk.Button(
+            btn_frame,
+            text="CLOSE",
+            command=self._on_close,
+            style="BigDashboard.TButton",
+        )
+        self.close_btn.pack(pady=30)
 
         # Dwell progress bar
         bar_frame = tk.Frame(outer, bg="#0f172a")
@@ -172,7 +178,7 @@ class TestGazeWindow:
                 pyautogui.moveTo(int(cx), int(cy))
 
         # Button highlight styles
-        for btn in [self.click_btn, self.reset_btn]:
+        for btn in [self.click_btn, self.reset_btn, self.close_btn]:
             if not btn.winfo_exists():
                 continue
             if btn is snapshot.target and snapshot.state == DwellState.SELECTED:
@@ -192,8 +198,10 @@ class TestGazeWindow:
         btn = self._dwell.on_blink()
         if btn is not None:
             print(f"[Test] Blink activating: {btn.cget('text')}")
-            # pyautogui.click() in app.py already fired at current cursor position
-            # on_blink() handles entering cooldown so next selection can begin
+            try:
+                btn.invoke()
+            except tk.TclError as e:
+                print(f"[VLC] invoke() failed: {e}")
         else:
             print("[Test] Blink received — no button ready or cooldown active.")
     # ── Button actions ────────────────────────────────────────────────────
@@ -215,9 +223,9 @@ class TestGazeWindow:
             cy = btn.winfo_rooty() + btn.winfo_height() / 2
             print(
                 f"[Layout] '{btn.cget('text')}' "
-                f"center=({cx:.0f},{cy:.0f})  "
-                f"entry_r={self._dwell.entry_radius}  "
-                f"hold_r={self._dwell.hold_radius}"
+                f"center=({cx:.0f},{cy:.0f})  "            
+                f"dwell_seconds={self._dwell.dwell_seconds}  "
+                f"switch_margin={self._dwell.switch_margin}"
             )
 
     # ── Cleanup ───────────────────────────────────────────────────────────

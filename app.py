@@ -3,13 +3,14 @@ import tkinter as tk
 import threading
 import pyautogui
 import sys
+import time
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from core.engine import ProjectGazeEngine
 from ui.splash import SplashScreen
-from ui.main_dashboard import EyeTheiaDesktopUI
+from ui.main_dashboard import GazeXDesktopUI
 from utils.filters import OneEuroFilterPair
 
 if getattr(sys, "frozen", False):
@@ -42,8 +43,10 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
         dcutoff=0.5,     # was 1.0 — smoother derivative estimate
     )
 
-    blink_counter  = 0
+    blink_start  = None
     EAR_THRESHOLD  = 0.22
+    MIN_BLINK_S = 0.20       #faster than this = detection noise, not a real blink
+    MAX_BLINK_S = 1.30       #slower than this = resting/closing eyes, not intentional
     was_calibrated = False
 
     while ui_handle.is_tracking and cap.isOpened():
@@ -62,23 +65,29 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
         landmarks = result.face_landmarks[0]
 
         # ── Blink detection ───────────────────────────────────────────────
+        # Get landmarks of only the left eye
         p_top = landmarks[159]
         p_bot = landmarks[145]
         p_l   = landmarks[33]
         p_r   = landmarks[133]
 
+        # Using Euclidean distance to calculate the vertical and horizontal distances
         v_dist   = ((p_top.x - p_bot.x)**2 + (p_top.y - p_bot.y)**2) ** 0.5
         h_dist   = ((p_l.x   - p_r.x  )**2 + (p_l.y   - p_r.y  )**2) ** 0.5
-        left_ear = v_dist / max(1e-6, h_dist)
+        EAR = v_dist / max(1e-6, h_dist)
 
-        if left_ear < EAR_THRESHOLD:
-            blink_counter += 1
+        if EAR < EAR_THRESHOLD:
+            if blink_start is None:
+                blink_start = time.monotonic()
         else:
-            if 3 <= blink_counter <= 12:
-                print("[Pipeline] Intentional blink detected.")
-                ui_handle.blink_triggered = True
-                pyautogui.click()
-            blink_counter = 0
+            if blink_start is not None:
+                duration = time.monotonic() - blink_start
+                if MIN_BLINK_S <= duration <= MAX_BLINK_S:
+                    print(f"[Pipeline] Intentional blink ({duration*1000:.0f}ms).")
+                    ui_handle.blink_triggered = True
+                else:
+                    print(f"[Pipeline] Blink ignored - {duration*1000:.0f}ms out of range")
+                blink_start = None
 
         # ── Inference ─────────────────────────────────────────────────────
         extracted = engine.extract_tensors(image, landmarks)
@@ -87,7 +96,6 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
             continue
 
         ui_handle.latest_features = extracted
-        print(f"[Pipeline] features set on ui_handle: {type(extracted)}")
 
         with torch.no_grad():
             pred = engine.model(*extracted).cpu().numpy().flatten()
@@ -127,7 +135,7 @@ def _startup_worker(splash: SplashScreen, weights_file: str, result: dict):
 
     try:
         # Step 1 — Load gaze model weights
-        splash.update_status("Loading EyeTheia gaze model")
+        splash.update_status("Loading GazeX gaze model")
         splash.set_progress(10, "Initialising neural network...")
         engine = ProjectGazeEngine(weights_file)
         splash.set_progress(35, "Gaze model loaded.")
@@ -216,7 +224,7 @@ def main():
             print("[Startup] Engine failed to load — exiting.")
             root.destroy()
             return
-        app = EyeTheiaDesktopUI(root, engine, background_vision_pipeline_worker)
+        app = GazeXDesktopUI(root, engine, background_vision_pipeline_worker)
 
     result["on_done"] = _on_done
 
