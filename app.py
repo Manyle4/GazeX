@@ -1,3 +1,4 @@
+''' app.py file'''
 import os
 import tkinter as tk
 import threading
@@ -43,11 +44,15 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
         dcutoff=0.5,     # was 1.0 — smoother derivative estimate
     )
 
+    _last_loop_time = time.monotonic()
+
     blink_start  = None
     EAR_THRESHOLD  = 0.22
     MIN_BLINK_S = 0.20       #faster than this = detection noise, not a real blink
     MAX_BLINK_S = 1.30       #slower than this = resting/closing eyes, not intentional
     was_calibrated = False
+    
+    frames_without_face = 0
 
     while ui_handle.is_tracking and cap.isOpened():
         success, image = cap.read()
@@ -60,7 +65,15 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
         result    = landmarker.detect(mp_image)
 
         if not result.face_landmarks:
+            frames_without_face += 1
+            if frames_without_face == 3:   # throttle — only warn once per dropout
+                mid_blink = blink_start is not None
+                print(f"[Pipeline] Face landmarks lost{' mid-blink' if mid_blink else ''} — will resume when face returns.")
             continue
+        
+        if frames_without_face >= 3:
+            print(f"[Pipeline] Face landmarks recovered after {frames_without_face} dropped frame(s).")
+        frames_without_face = 0
 
         landmarks = result.face_landmarks[0]
 
@@ -79,6 +92,7 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
         if EAR < EAR_THRESHOLD:
             if blink_start is None:
                 blink_start = time.monotonic()
+                print("[Pipeline] Blink detection is starting!")
         else:
             if blink_start is not None:
                 duration = time.monotonic() - blink_start
@@ -88,6 +102,8 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
                 else:
                     print(f"[Pipeline] Blink ignored - {duration*1000:.0f}ms out of range")
                 blink_start = None
+                
+        ui_handle.eyes_closing = (blink_start is not None)
 
         # ── Inference ─────────────────────────────────────────────────────
         extracted = engine.extract_tensors(image, landmarks)
@@ -111,6 +127,10 @@ def background_vision_pipeline_worker(ui_handle, engine, data_queue):
             was_calibrated = True
             print("[Pipeline] Filter reset after calibration.")
 
+        # now_loop = time.monotonic()
+        # print(f"[Loop] dt={now_loop - _last_loop_time:.3f}s ({1.0/(now_loop - _last_loop_time):.1f}Hz)")
+        # _last_loop_time = now_loop
+        
         smooth_x, smooth_y = gaze_filter.filter(float(raw_x), float(raw_y))
 
         try:

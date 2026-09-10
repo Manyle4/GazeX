@@ -100,7 +100,7 @@ class DwellController:
         """Register the list of Tkinter buttons gaze can select between."""
         self._buttons = buttons
 
-    def update(self, gx: float, gy: float) -> DwellSnapshot:
+    def update(self, gx: float, gy: float, frozen: bool = False) -> DwellSnapshot:
         """Feed a new gaze coordinate. Call once per tick from the UI thread."""
         now = time.monotonic()
 
@@ -110,7 +110,7 @@ class DwellController:
         if self._state == DwellState.SELECTED:
             return self._handle_selected(gx, gy, now)
 
-        return self._handle_tracking(gx, gy, now)
+        return self._handle_tracking(gx, gy, now, frozen)
 
     def on_blink(self) -> Optional[Any]:
         """
@@ -129,10 +129,56 @@ class DwellController:
             # during the dwell-fill animation. Ignore it.
             return None
 
+        # Defensive liveness check — self._selected can only be None here in
+        # theory (see _handle_selected), but it CAN be a reference to a
+        # widget that got destroyed elsewhere without this controller ever
+        # being told. Verify it's still real before handing it back, so the
+        # caller never has to catch a TclError from an already-dead button.
+        if not self._is_alive(self._selected):
+            print("[Dwell] selected button no longer exists — resetting instead of returning it")
+            self.reset()
+            return None
+
         btn = self._selected
         self._enter_cooldown(now)
+        print("[Dwell] A click has been made and now entering cooldown!")
         return btn
+    
+    def is_selected(self) -> bool:
+        return self._state == DwellState.SELECTED
+    
+    def check_timeout(self, timeout_seconds: float = 3.0) -> Optional[Any]:
+        """
+        Fallback for on_blink(): if a button has been sitting in SELECTED
+        (fully dwelled, waiting for blink) for longer than timeout_seconds,
+        auto-confirm it anyway. Completely independent of blink detection —
+        call this every tick alongside on_blink(), not instead of it.
+        """
+        if self._state != DwellState.SELECTED:
+            return None
 
+        now = time.monotonic()
+        if (now - self._selected_at) < timeout_seconds:
+            return None
+
+        if not self._is_alive(self._selected):
+            print("[Dwell] selected button no longer exists — resetting instead of returning it")
+            self.reset()
+            return None
+
+        btn = self._selected
+        self._enter_cooldown(now)
+        print("[Dwell] Auto-confirmed via timeout (no blink detected in time).")
+        return btn
+    
+    def get_nearest_button(self, gx: float, gy: float):
+        """Fallback helper — the button gaze is nearest to right now,
+        independent of dwell/confirm state. Used when on_blink() returns
+        None and we want a same-tick answer without relying on where the
+        OS mouse cursor visually is (which can lag a frame behind)."""
+        nearest, _ = self._nearest_button(gx, gy)
+        return nearest
+    
     def reset(self) -> None:
         """Force back to tracking with no target — call on window close/view change."""
         self._state       = DwellState.IDLE
@@ -142,19 +188,28 @@ class DwellController:
 
     # ── Core: forced nearest-button classification ─────────────────────────
 
+    def _is_alive(self, btn) -> bool:
+        """True only if btn is a real, still-existing widget. Centralised so
+        every place that trusts a stored button reference (self._target,
+        self._selected, or a candidate from self._buttons) checks it the
+        same way, instead of some call sites checking and others not."""
+        if btn is None:
+            return False
+        try:
+            return bool(btn.winfo_exists())
+        except Exception:
+            return False
+
     def _nearest_button(self, gx: float, gy: float):
         """Always returns the closest live, viewable button — None only if none exist."""
         best, best_d = None, float("inf")
         for btn in self._buttons:
-            try:
-                if not btn.winfo_exists():
-                    continue
-                cx, cy = self._btn_center(btn)
-                d = math.hypot(gx - cx, gy - cy)
-                if d < best_d:
-                    best_d, best = d, btn
-            except Exception:
+            if not self._is_alive(btn):
                 continue
+            cx, cy = self._btn_center(btn)
+            d = math.hypot(gx - cx, gy - cy)
+            if d < best_d:
+                best_d, best = d, btn
         return best, best_d
 
     def _distance_to(self, btn, gx: float, gy: float) -> float:
@@ -166,7 +221,7 @@ class DwellController:
         self._dwell_accum = 0.0
         self._dwell_start = now
 
-    def _handle_tracking(self, gx: float, gy: float, now: float) -> DwellSnapshot:
+    def _handle_tracking(self, gx: float, gy: float, now: float, frozen: bool = False) -> DwellSnapshot:
         if not self._buttons:
             return DwellSnapshot(
                 state=DwellState.IDLE, 
@@ -183,7 +238,7 @@ class DwellController:
                 can_click=False, status_text="No visible buttons",
             )
 
-        if self._target is None:
+        if self._target is None or not self._is_alive(self._target):
             self._set_target(nearest, now)
         elif nearest is not self._target:
             current_d = self._distance_to(self._target, gx, gy)
@@ -192,6 +247,18 @@ class DwellController:
             if current_d - nearest_d >= self.switch_margin:
                 self._set_target(nearest, now)
             # else: gaze is near the boundary — keep dwelling on current target
+
+        if frozen:
+            # Hold progress exactly where it is — re-stamp the clock so the
+            # frozen interval isn't counted as elapsed dwell time once we
+            # unfreeze, but don't advance _dwell_accum at all.
+            self._dwell_start = now
+            progress = self._dwell_accum / self.dwell_seconds
+            return DwellSnapshot(
+                state=DwellState.DWELLING, target=self._target, progress=progress,
+                can_click=False, move_cursor_to=self._target,
+                status_text=f"Dwelling: {self._btn_name(self._target)}  {int(progress * 100)}% (holding)",
+            )
 
         elapsed = now - self._dwell_start
         self._dwell_start  = now
@@ -216,6 +283,19 @@ class DwellController:
         )
 
     def _handle_selected(self, gx: float, gy: float, now: float) -> DwellSnapshot:
+        # The button we're "confirming" might have been destroyed by
+        # something outside this controller (page rebuild, window close)
+        # since we last touched it. Check that FIRST, before doing any
+        # distance math against it — that math is exactly what would throw
+        # a TclError on a dead widget.
+        if not self._is_alive(self._selected):
+            print("[Dwell] selected button vanished mid-confirmation — resetting")
+            self.reset()
+            return DwellSnapshot(
+                state=DwellState.IDLE, target=None, progress=0.0,
+                can_click=False, status_text="Look at a button to begin",
+            )
+
         can_click = (now - self._selected_at) >= self.min_hold_seconds
 
         nearest, nearest_d = self._nearest_button(gx, gy)

@@ -21,6 +21,7 @@ eyetheia.spec
 
 try.py
 draw.py
+snapping.py
 dwell_controller2.py
 calibration_page2.py
 vlc2.py
@@ -29,3 +30,25 @@ vlcnew.py
 vlcs.py
 app2.py
 appS.py
+
+app_claude.py
+dwell_2.py
+dwell_claude.py
+dwell_spare.py
+engine_claude.py
+engine2.py
+
+main_claude.py
+main_dashboard2.py
+test.py
+vlc_claude.py
+vlc_spare.py
+vlc_spare2.py
+vlc2.py
+filters_claude.py
+filters2.py
+app2.py
+appE.py
+appM.py
+
+test_benchmark.py

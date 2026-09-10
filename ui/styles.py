@@ -9,14 +9,29 @@ def configure_application_themes():
     style.theme_use("clam")
     
     # --- DESIGN TOKEN CONSTANTS ---
-    BG_DARK = "#1e293b"       # Sleek slate gray background
-    TEXT_LIGHT = "#f8fafc"    # Off-white crisp text
-    ACCENT_CYAN = "#06b6d4"   # Eye-catching cyan accent token
-    BORDER_COLOR = "#334155"  # Clean custom button boundary color
+    BG_DARK      = "#0f172a"   # window/canvas background — use everywhere
+    SURFACE_DARK = "#1e293b"   # button/panel body color
+    TEXT_LIGHT   = "#f8fafc"
+    ACCENT_CYAN  = "#06b6d4"
+    ACCENT_CYAN_LIGHT = "#22d3ee"
+    BORDER_COLOR = "#334155"
+    MUTED_TEXT   = "#94a3b8"
     
     # Configure the base main window background frame look
     style.configure(".", background=BG_DARK, foreground=TEXT_LIGHT)
     
+    style.configure("AppTitle.TLabel", font=("Arial", 28, "bold"), background=BG_DARK, foreground=TEXT_LIGHT)
+    style.configure("Body.TLabel",      font=("Arial", 12),         background=BG_DARK, foreground=TEXT_LIGHT)
+    style.configure("Debug.TLabel",     font=("Consolas", 10),      background=BG_DARK, foreground=MUTED_TEXT)
+    
+    style.configure(
+        "Dwell.Horizontal.TProgressbar",
+        troughcolor=SURFACE_DARK,
+        background=ACCENT_CYAN,
+        bordercolor=BORDER_COLOR,
+        lightcolor=ACCENT_CYAN,
+        darkcolor=ACCENT_CYAN,
+    )
     # --- CUSTOM BIG BUTTON STYLES ---
     style.configure(
         "BigDashboard.TButton",
@@ -28,18 +43,6 @@ def configure_application_themes():
         lightcolor=ACCENT_CYAN,       # Secondary bevel highlights matching theme
         darkcolor=ACCENT_CYAN,
         padding=(40, 20)              # ◄── MAKES BUTTONS BIGGER (Horizontal, Vertical padding)
-    )
-    
-    style.configure(
-        "Panel.TButton",
-        font=("Arial", 20, "bold"),
-        foreground=TEXT_LIGHT,
-        background="#ff4800",      # Core body color
-        borderwidth=3,                # Thick border layout array
-        bordercolor="#00ff88",      # ◄── YOUR CUSTOM OUTLINE COLOR HERE!
-        lightcolor="#00ff88",       # Secondary bevel highlights matching theme
-        darkcolor="#00ff88",
-        padding=(40, 10)              # ◄── MAKES BUTTONS BIGGER (Horizontal, Vertical padding)
     )
     
     style.configure(

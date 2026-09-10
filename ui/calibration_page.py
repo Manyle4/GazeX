@@ -17,7 +17,6 @@ import tkinter as tk
 import threading
 from collections import deque
 
-
 # ── Layout ────────────────────────────────────────────────────────────────────
 MARGIN_X_FRAC = 0.10
 MARGIN_Y_FRAC = 0.12
@@ -32,10 +31,6 @@ RING_IDLE     = "#cbd5e1"
 RING_FILL     = "#06b6d4"
 FLASH_COLOR   = "#22c55e"
 GHOST_COLOR   = "#e2e8f0"
-
-# Offset measurement
-OFFSET_COLLECT_SECONDS = 2.0   # how long to collect gaze for offset
-
 
 def _make_grid(screen_w: int, screen_h: int) -> list[tuple[int, int]]:
     """
@@ -77,7 +72,7 @@ class CalibrationWindow:
     # Phases
     PHASE_CALIBRATION = "calibration"
     PHASE_FINETUNING  = "finetuning"
-    PHASE_OFFSET      = "offset"
+    # PHASE_OFFSET      = "offset"
     PHASE_DONE        = "done"
 
     def __init__(self, parent_root, engine, tuning_progress_queue):
@@ -97,7 +92,7 @@ class CalibrationWindow:
 
         self.sheet = tk.Canvas(
             self.win, width=self.w, height=self.h,
-            bg="white", highlightthickness=0,
+            bg="#0f172a", highlightthickness=0,
         )
         self.sheet.pack(fill=tk.BOTH, expand=True)
 
@@ -115,9 +110,9 @@ class CalibrationWindow:
         self._feature_buffer: deque = deque(maxlen=6)
 
         # Offset measurement state
-        self._offset_samples: list[tuple[int, int]] = []
-        self._offset_start   = 0.0
-        self._offset_pct     = 0.0   # 0.0 → 1.0 for the offset ring
+        # self._offset_samples: list[tuple[int, int]] = []
+        # self._offset_start   = 0.0
+        # self._offset_pct     = 0.0   # 0.0 → 1.0 for the offset ring
 
         self.win.focus_force()
         self.win.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -127,7 +122,7 @@ class CalibrationWindow:
 
     # ── Gaze input ────────────────────────────────────────────────────────────
 
-    def on_new_gaze(self, gx: float, gy: float):
+    def on_new_gaze(self):
         if not self.win.winfo_exists():
             return
 
@@ -135,9 +130,9 @@ class CalibrationWindow:
             if self.latest_features is not None:
                 self._feature_buffer.append(self.latest_features)
 
-        elif self._phase == self.PHASE_OFFSET:
-            # Collect gaze samples for offset calculation
-            self._offset_samples.append((int(gx), int(gy)))
+        # elif self._phase == self.PHASE_OFFSET:
+        #     # Collect gaze samples for offset calculation
+        #     self._offset_samples.append((int(gx), int(gy)))
 
     # ── Calibration countdown ─────────────────────────────────────────────────
 
@@ -203,9 +198,9 @@ class CalibrationWindow:
 
         def _hook(pct: int):
             self.tuning_progress_queue.put(pct)
-            if pct >= 100:
-                # Fine-tuning complete — start offset measurement
-                self.win.after(600, self._start_offset_measurement)
+            # if pct >= 100:
+            #     # Fine-tuning complete — start offset measurement
+            #     self.win.after(600, self._start_offset_measurement)
 
         threading.Thread(
             target=self.engine.local_fine_tune,
@@ -216,64 +211,22 @@ class CalibrationWindow:
     # ── Offset measurement ────────────────────────────────────────────────────
 
     def _start_offset_measurement(self):
-        """
-        Show a single dot in the screen centre.
-        Collect gaze samples for OFFSET_COLLECT_SECONDS.
-        Compute and apply the offset automatically.
-        """
-        if not self.win.winfo_exists():
-            return
+        # """
+        # Show a single dot in the screen centre.
+        # Collect gaze samples for OFFSET_COLLECT_SECONDS.
+        # Compute and apply the offset automatically.
+        # """
+        # if not self.win.winfo_exists():
+        #     return
 
-        self._phase          = self.PHASE_OFFSET
-        self._offset_samples = []
-        self._offset_start   = time.monotonic()
-        self._offset_pct     = 0.0
+        # self._phase          = self.PHASE_OFFSET
+        # self._offset_samples = []
+        # self._offset_start   = time.monotonic()
+        # self._offset_pct     = 0.0
 
-        print("[Offset] Starting automatic offset measurement...")
-        self._offset_tick()
-
-    def _offset_tick(self):
-        """Advance the offset collection ring. Fires every 50ms."""
-        if not self.win.winfo_exists():
-            return
-        if self._phase != self.PHASE_OFFSET:
-            return
-
-        elapsed = time.monotonic() - self._offset_start
-        self._offset_pct = min(1.0, elapsed / OFFSET_COLLECT_SECONDS)
-
-        if self._offset_pct >= 1.0:
-            self._apply_offset()
-        else:
-            self.win.after(50, self._offset_tick)
-
-    def _apply_offset(self):
-        """Compute the average gaze position and derive the correction offset."""
-        if not self._offset_samples:
-            print("[Offset] No samples collected — skipping offset correction.")
-            self._finish()
-            return
-
-        target_x = self.w // 2
-        target_y = self.h // 2
-
-        avg_x = int(sum(s[0] for s in self._offset_samples) / len(self._offset_samples))
-        avg_y = int(sum(s[1] for s in self._offset_samples) / len(self._offset_samples))
-
-        dx = target_x - avg_x
-        dy = target_y - avg_y
-
-        self.engine.set_gaze_offset(dx, dy)
-
-        print(
-            f"[Offset] Target=({target_x},{target_y})  "
-            f"Avg gaze=({avg_x},{avg_y})  "
-            f"Correction: dx={dx}, dy={dy}  "
-            f"(from {len(self._offset_samples)} samples)"
-        )
-
-        # Brief pause so the user sees the completion flash
-        self.win.after(500, self._finish)
+        # print("[Offset] Starting automatic offset measurement...")
+        # self._offset_tick()
+        pass
 
     def _finish(self):
         self._phase = self.PHASE_DONE
@@ -295,8 +248,8 @@ class CalibrationWindow:
             self._draw_calibration()
         elif self._phase == self.PHASE_FINETUNING:
             self._draw_finetuning()
-        elif self._phase == self.PHASE_OFFSET:
-            self._draw_offset()
+        # elif self._phase == self.PHASE_OFFSET:
+        #     self._draw_offset()
         elif self._phase == self.PHASE_DONE:
             self._draw_done()
 
@@ -304,7 +257,7 @@ class CalibrationWindow:
         self.sheet.create_text(
             self.w // 2, 44,
             text=f"Look at each dot and hold still  —  {self.target_idx} of {len(self.targets)} captured",
-            font=("Arial", 15), fill="#475569",
+            font=("Arial", 15), fill="#94a3b8",
         )
 
         for i, (tx, ty) in enumerate(self.targets):
@@ -330,7 +283,7 @@ class CalibrationWindow:
         self.sheet.create_oval(
             tx - RING_RADIUS, ty - RING_RADIUS,
             tx + RING_RADIUS, ty + RING_RADIUS,
-            outline=RING_IDLE, width=RING_WIDTH, fill="white",
+            outline=RING_IDLE, width=RING_WIDTH, fill="#0f172a",
         )
 
         if self._countdown_pct > 0:
@@ -344,14 +297,14 @@ class CalibrationWindow:
         self.sheet.create_oval(
             tx - DOT_RADIUS, ty - DOT_RADIUS,
             tx + DOT_RADIUS, ty + DOT_RADIUS,
-            fill="#0f172a", outline="",
+            fill="#94a3b8", outline="",
         )
 
         pct = int(self._countdown_pct * 100)
         if pct > 0:
             self.sheet.create_text(
                 tx, ty + RING_RADIUS + 20,
-                text=f"{pct}%", font=("Arial", 11), fill="#64748b",
+                text=f"{pct}%", font=("Arial", 11), fill="#94a3b8",
             )
 
     def _draw_finetuning(self):
@@ -360,12 +313,12 @@ class CalibrationWindow:
         self.sheet.create_text(
             cx, cy - 70,
             text="Adapting model to your eyes...",
-            font=("Arial", 17, "bold"), fill="#1e293b",
+            font=("Arial", 17, "bold"), fill="#f8fafc",
         )
         self.sheet.create_text(
             cx, cy - 38,
             text="Please keep still — this takes a few seconds",
-            font=("Arial", 11, "italic"), fill="#64748b",
+            font=("Arial", 11, "italic"), fill="#94a3b8",
         )
 
         bar_w, bar_h = 420, 28
@@ -374,7 +327,7 @@ class CalibrationWindow:
 
         self.sheet.create_rectangle(
             bx1, by1, bx2, by2,
-            outline="#334155", width=2, fill="#f1f5f9",
+            outline="#334155", width=2, fill="#1e293b",
         )
         prog = self.current_progress
         if prog > 0:
@@ -385,61 +338,15 @@ class CalibrationWindow:
             )
         self.sheet.create_text(
             cx, cy + 40,
-            text=f"{prog}%", font=("Arial", 13, "bold"), fill="#0f172a",
+            text=f"{prog}%", font=("Arial", 13, "bold"), fill="#f8fafc",
         )
-
-    def _draw_offset(self):
-        """Draw the offset measurement dot in the screen centre."""
-        cx = self.w // 2
-        cy = self.h // 2
-
-        self.sheet.create_text(
-            cx, cy - 90,
-            text="Almost done — look at the dot below",
-            font=("Arial", 16, "bold"), fill="#1e293b",
-        )
-        self.sheet.create_text(
-            cx, cy - 58,
-            text="Hold your gaze steady on the dot",
-            font=("Arial", 12, "italic"), fill="#64748b",
-        )
-
-        # Progress ring (same visual language as calibration dots)
-        self.sheet.create_oval(
-            cx - RING_RADIUS, cy - RING_RADIUS,
-            cx + RING_RADIUS, cy + RING_RADIUS,
-            outline=RING_IDLE, width=RING_WIDTH, fill="white",
-        )
-
-        if self._offset_pct > 0:
-            self.sheet.create_arc(
-                cx - RING_RADIUS, cy - RING_RADIUS,
-                cx + RING_RADIUS, cy + RING_RADIUS,
-                start=90, extent=-(self._offset_pct * 360.0),
-                outline="#f59e0b",   # amber — distinct from calibration cyan
-                width=RING_WIDTH, style=tk.ARC,
-            )
-
-        self.sheet.create_oval(
-            cx - DOT_RADIUS, cy - DOT_RADIUS,
-            cx + DOT_RADIUS, cy + DOT_RADIUS,
-            fill="#0f172a", outline="",
-        )
-
-        pct = int(self._offset_pct * 100)
-        if pct > 0:
-            self.sheet.create_text(
-                cx, cy + RING_RADIUS + 20,
-                text=f"Measuring... {pct}%",
-                font=("Arial", 11), fill="#64748b",
-            )
 
     def _draw_done(self):
         cx, cy = self.w // 2, self.h // 2
         self.sheet.create_text(
             cx, cy,
             text="Calibration complete ✓",
-            font=("Arial", 18, "bold"), fill="#1D9E75",
+            font=("Arial", 18, "bold"), fill="#19b87e",
         )
 
     # ── Called by dashboard progress update ───────────────────────────────────

@@ -44,10 +44,10 @@ class _OneEuroFilter:
         :param beta:      Speed coefficient — higher = faster response to motion
         :param dcutoff:   Cutoff for the derivative low-pass filter (usually 1.0)
         """
-        self.freq      = freq
-        self.mincutoff = mincutoff
-        self.beta      = beta
-        self.dcutoff   = dcutoff
+        self.freq      = freq               # frequency
+        self.mincutoff = mincutoff          # minimum frequency cutoff when eye movements are more stable
+        self.beta      = beta               # how fast the frequency changes
+        self.dcutoff   = dcutoff            # calculated frequency cutoff 
 
         self._x_filt  = _LowPassFilter()   # filtered signal
         self._dx_filt = _LowPassFilter()   # filtered derivative
